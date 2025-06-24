@@ -7,9 +7,13 @@ import schema from "../instant.schema";
 
 type Todo = InstaQLEntity<typeof schema, "todos">;
 
+const room = db.room("todos");
+
 function App() {
   // Read Data
   const { isLoading, error, data } = db.useQuery({ todos: {} });
+  const { peers } = db.rooms.usePresence(room);
+  const numUsers = 1 + Object.keys(peers).length;
   if (isLoading) {
     return;
   }
@@ -19,6 +23,9 @@ function App() {
   const { todos } = data;
   return (
     <div className="font-mono min-h-screen flex justify-center items-center flex-col space-y-4">
+      <div className="text-xs text-gray-500">
+        Number of users online: {numUsers}
+      </div>
       <h2 className="tracking-wide text-5xl text-gray-300">todos</h2>
       <div className="border border-gray-300 max-w-xs w-full">
         <TodoForm todos={todos} />

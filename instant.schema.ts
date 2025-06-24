@@ -18,7 +18,11 @@ const _schema = i.schema({
     }),
   },
   links: {},
-  rooms: {},
+  rooms: {
+    todos: {
+      presence: i.entity({})
+    }
+  },
 });
 
 // This helps Typescript display nicer intellisense
