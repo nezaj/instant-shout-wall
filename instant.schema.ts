@@ -11,13 +11,25 @@ const _schema = i.schema({
     $users: i.entity({
       email: i.string().unique().indexed().optional(),
     }),
+    profiles: i.entity({
+      handle: i.string(),
+    }),
     todos: i.entity({
       text: i.string(),
       done: i.boolean(),
       createdAt: i.number(),
     }),
   },
-  links: {},
+  links: {
+    userProfiles: {
+      forward: { on: "profiles", has: "one", label: "user" },
+      reverse: { on: "$users", has: "one", label: "profile" },
+    },
+    profileAvatars: {
+      forward: { on: "profiles", has: "one", label: "avatar" },
+      reverse: { on: "$files", has: "one", label: "profile" },
+    }
+  },
   rooms: {
     todos: {
       presence: i.entity({})
