@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@instantdb/react':
+    specifier: ^0.20.1
+    version: 0.20.1(react@19.1.0)
   next:
     specifier: 15.3.4
     version: 15.3.4(react-dom@19.1.0)(react@19.1.0)
@@ -387,6 +390,22 @@ packages:
     requiresBuild: true
     dev: false
     optional: true
+
+  /@instantdb/core@0.20.1:
+    resolution: {integrity: sha512-m1JzOeXDVM9VHBSGwea2dlN4Q8DuUVzewdugy83ACU1O7/lyLU0SI0EhqpzA6Yv9iznUaG0QlDAOmcMbINAATQ==}
+    dependencies:
+      mutative: 1.2.0
+      uuid: 9.0.1
+    dev: false
+
+  /@instantdb/react@0.20.1(react@19.1.0):
+    resolution: {integrity: sha512-n+akEwWWXKfd7YQx5slH89NMv9k+EjiVlnHhg5mh70BAEwxY/tjcbEG8n0B2vnCVOeWfmLsyrpKHWQwvPuay0Q==}
+    peerDependencies:
+      react: '>=16'
+    dependencies:
+      '@instantdb/core': 0.20.1
+      react: 19.1.0
+    dev: false
 
   /@isaacs/fs-minipass@4.0.1:
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
@@ -2604,6 +2623,11 @@ packages:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
     dev: true
 
+  /mutative@1.2.0:
+    resolution: {integrity: sha512-1muFw45Lwjso6TSBGiXfbjKS01fVSD/qaqBfTo/gXgp79e8KM4Sa1XP/S4iN2/DvSdIZgjFJI+JIhC7eKf3GTg==}
+    engines: {node: '>=14.0'}
+    dev: false
+
   /nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -3381,6 +3405,11 @@ packages:
     dependencies:
       punycode: 2.3.1
     dev: true
+
+  /uuid@9.0.1:
+    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    hasBin: true
+    dev: false
 
   /which-boxed-primitive@1.1.1:
     resolution: {integrity: sha512-TbX3mj8n0odCBFVlY8AxkqcHASw3L60jIuF8jFP78az3C2YhmGvqbHBpAjTRH2/xqYunrJ9g1jSyjCjpoWzIAA==}
