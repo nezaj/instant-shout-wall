@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@instantdb/react':
-    specifier: ^0.20.1
-    version: 0.20.1(react@19.1.0)
+    specifier: ^0.20.2
+    version: 0.20.2(react@19.1.0)
   next:
     specifier: 15.3.4
     version: 15.3.4(react-dom@19.1.0)(react@19.1.0)
@@ -391,19 +391,19 @@ packages:
     dev: false
     optional: true
 
-  /@instantdb/core@0.20.1:
-    resolution: {integrity: sha512-m1JzOeXDVM9VHBSGwea2dlN4Q8DuUVzewdugy83ACU1O7/lyLU0SI0EhqpzA6Yv9iznUaG0QlDAOmcMbINAATQ==}
+  /@instantdb/core@0.20.2:
+    resolution: {integrity: sha512-eFCb0a4eSMnodLc5SEpIXqPs+FACex1MT1Z4KinsgcMWgWNcA0PbZY45MMAY1vcHgtouqjIgyqB9eJ4/KM4CdA==}
     dependencies:
       mutative: 1.2.0
       uuid: 9.0.1
     dev: false
 
-  /@instantdb/react@0.20.1(react@19.1.0):
-    resolution: {integrity: sha512-n+akEwWWXKfd7YQx5slH89NMv9k+EjiVlnHhg5mh70BAEwxY/tjcbEG8n0B2vnCVOeWfmLsyrpKHWQwvPuay0Q==}
+  /@instantdb/react@0.20.2(react@19.1.0):
+    resolution: {integrity: sha512-lpNJoA72ABS75bfRVpZi4Rrfc9F+8ky8rHYaZWXg5+uMlEPrC2LCUluarQ5bUUOIi2UjZbNxLF3PIBLPd2T0ug==}
     peerDependencies:
       react: '>=16'
     dependencies:
-      '@instantdb/core': 0.20.1
+      '@instantdb/core': 0.20.2
       react: 19.1.0
     dev: false
 

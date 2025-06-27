@@ -14,6 +14,10 @@ const _schema = i.schema({
     profiles: i.entity({
       handle: i.string(),
     }),
+    posts: i.entity({
+      text: i.string(),
+      createdAt: i.number().indexed(),
+    }),
     todos: i.entity({
       text: i.string(),
       done: i.boolean(),
@@ -25,6 +29,10 @@ const _schema = i.schema({
       forward: { on: "profiles", has: "one", label: "user" },
       reverse: { on: "$users", has: "one", label: "profile" },
     },
+    postAuthors: {
+      forward: { on: "posts", has: "one", label: "author", required: true },
+      reverse: { on: "profiles", has: "many", label: "posts" },
+    },
     profileAvatars: {
       forward: { on: "profiles", has: "one", label: "avatar" },
       reverse: { on: "$files", has: "one", label: "profile" },
@@ -32,7 +40,16 @@ const _schema = i.schema({
   },
   rooms: {
     todos: {
-      presence: i.entity({})
+      presence: i.entity({}),
+      topics: {
+        shout: i.entity({
+          text: i.string(),
+          x: i.number(),
+          y: i.number(),
+          angle: i.number(),
+          size: i.number(),
+        })
+      },
     }
   },
 });

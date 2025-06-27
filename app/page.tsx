@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, useContext } from "react";
-import { id, InstaQLEntity, User } from "@instantdb/react";
+import { id, lookup, InstaQLEntity, User } from "@instantdb/react";
 
 import db from "../lib/db";
 import schema from "../instant.schema";
 
-type Todo = InstaQLEntity<typeof schema, "todos">;
-type Profile = InstaQLEntity<typeof schema, "profiles">;
+type ProfileWithAvatar = InstaQLEntity<typeof schema, "profiles", { avatar: {} }>;
+type PostsWithProfile = InstaQLEntity<typeof schema, "posts", { author: {} }>;
 
 interface AuthProfileContextValue {
   user: User | null | undefined;
-  profile: Profile | undefined;
+  profile: ProfileWithAvatar | undefined;
   isLoading: boolean;
   error: { message: string } | undefined;
 }
@@ -27,6 +27,16 @@ function randomHandle() {
   return `${randomAdjective}${randomNoun}${randomSuffix}`;
 }
 
+async function createProfile(userId: string) {
+  // IMPORTANT: transact is how you write data to the database
+  // We want to block until the profile is created, so we use await
+  await db.transact(
+    db.tx.profiles[userId].update({
+      handle: randomHandle(),
+    }).link({ user: userId })
+  );
+}
+
 function AuthProfileProvider({ children }: { children: React.ReactNode }) {
   const { isLoading: authLoading, user, error: authError } = db.useAuth();
   // useQuery is how you subscribe to DB data
@@ -38,8 +48,9 @@ function AuthProfileProvider({ children }: { children: React.ReactNode }) {
         $: {
           where: { "user.id": user.id },
         },
+        avatar: {}
       },
-    } : {}
+    } : null
   );
 
   const profile = data?.profiles?.[0];
@@ -48,19 +59,13 @@ function AuthProfileProvider({ children }: { children: React.ReactNode }) {
   // connect user data to other namespaces like $files
   useEffect(() => {
     if (!user || profileLoading || profile) return;
-    // transact is how you write data to the database
-    db.transact(
-      // ids must be a valid UUID, so we use `id()` to generate one
-      db.tx.profiles[id()].update({
-        handle: randomHandle(),
-      }).link({ user: user.id })
-    );
+    createProfile(user.id);
   }, [user, profileLoading, profile]);
 
   const value = {
     user,
     profile,
-    isLoading: authLoading || profileLoading,
+    isLoading: authLoading || !!(user && !profile),
     error: authError || profileError,
   };
 
@@ -91,21 +96,106 @@ function App() {
 
 function AppContent() {
   const { user, profile, isLoading, error } = useAuthProfile();
-
-  if (isLoading || !profile) { return; }
+  if (isLoading) { return; }
   if (error) { return <div className="p-4 text-red-500">Uh oh! {error.message}</div>; }
-  if (user) { return <Main user={user} profile={profile} />; }
+  if (user && profile) { return <Main user={user} profile={profile} />; }
   return <Login />;
 }
 
-function Main({ user, profile }: { user: User, profile: Profile }) {
+function ProfileAvatar({ profile, user }: { profile: ProfileWithAvatar, user: User }) {
+  const [isUploading, setIsUploading] = useState(false);
+  const avatarPath = `${user.id}/avatar`;
+
+  const handleAvatarDelete = async () => {
+    if (!profile.avatar) return;
+    // IMPORTANT: lookup lets you find the id by a field value. This only works if the
+    // field is unqiue
+    db.transact(db.tx.$files[lookup("path", avatarPath)].delete());
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      // Upload file with user-specific path
+      const { data } = await db.storage.uploadFile(avatarPath, file);
+
+      // Link to profile
+      await db.transact(
+        db.tx.profiles[profile.id].link({ avatar: data.id })
+      );
+    } catch (error) {
+      console.error('Upload failed:', error);
+    }
+    setIsUploading(false);
+  };
+
+  return (
+    <div className="flex items-center space-x-3 p-4">
+      <label className="relative cursor-pointer">
+        {profile.avatar ? (
+          <img
+            src={profile.avatar.url}
+            alt={profile.handle}
+            className="w-12 h-12 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+            {profile.handle[0].toUpperCase()}
+          </div>
+        )}
+
+        {isUploading && (
+          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleAvatarUpload}
+          className="hidden"
+          disabled={isUploading}
+        />
+      </label>
+      <div>
+        <div>Profile: {profile.handle}</div>
+        <div>Email: {user.email}</div>
+        <button
+          onClick={handleAvatarDelete}
+          className="text-red-500 hover:text-red-700 disabled:text-gray-400 hover:cursor-pointer disabled:hover:cursor-not-allowed"
+          disabled={!profile.avatar || isUploading}>
+          Delete Avatar
+        </button>
+
+      </div>
+    </div>
+  );
+}
+
+function Main({ user, profile }: { user: User, profile: ProfileWithAvatar }) {
   const { isLoading, error, data } = db.useQuery({
     todos: {},
+    posts: {
+      $: {
+        order: { createdAt: "desc" },
+        limit: 10,
+      },
+      author: {},
+    },
   });
 
-  // usePresence is how you subscribe to presence data
+  // IMPORTANT: usePresence is how you subscribe to presence data
   const { peers } = db.rooms.usePresence(room);
   const numUsers = 1 + Object.keys(peers).length;
+
+  // IMPORTANT: useTopicEffect is how you react to topic messages
+  db.rooms.useTopicEffect(room, 'shout', (message) => {
+    addShout(message);
+  });
 
   if (isLoading) {
     return;
@@ -113,33 +203,20 @@ function Main({ user, profile }: { user: User, profile: Profile }) {
   if (error) {
     return <div className="text-red-500 p-4">Error: {error.message}</div>;
   }
-  const { todos } = data;
+  const { posts } = data;
   return (
 
-    <div className="font-mono min-h-screen flex justify-center items-center flex-col space-y-4">
-      <div className="flex items-center space-x-3 p-4">
-        <div className="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
-          {profile.handle[0].toUpperCase()}
+    <div>
+      <ProfileAvatar profile={profile} user={user} />
+      <div className="font-mono flex items-center flex-col space-y-4">
+        <div className="text-xs text-gray-500">
+          Number of users online: {numUsers}
         </div>
-        <div>
-          <div>Profile: {profile.handle}</div>
-          <div>Email: {user.email}</div>
+        <div className="border border-gray-300 max-w-xs w-full">
+          <PostForm />
+          <PostList posts={posts} />
         </div>
       </div>
-
-      <div className="text-xs text-gray-500">
-        Number of users online: {numUsers}
-      </div>
-      <h2 className="tracking-wide text-5xl text-gray-300">todos</h2>
-      <div className="border border-gray-300 max-w-xs w-full">
-        <TodoForm todos={todos} />
-        <TodoList todos={todos} />
-        <ActionBar todos={todos} />
-      </div>
-      <div className="text-xs text-center">
-        Open another tab to see todos update in realtime!
-      </div>
-
     </div>
   );
 }
@@ -195,18 +272,8 @@ function EmailStep({ onSendEmail }: { onSendEmail: (email: string) => void }) {
         To try the app, enter your email, and we'll send you a verification code. We'll create
         an account for you too if you don't already have one.
       </p>
-      <input
-        ref={inputRef}
-        type="email"
-        className="border border-gray-300 px-3 py-1  w-full"
-        placeholder="Enter your email"
-        required
-        autoFocus
-      />
-      <button
-        type="submit"
-        className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full"
-      >
+      <input ref={inputRef} type="email" className="border border-gray-300 px-3 py-1  w-full" placeholder="Enter your email" required autoFocus />
+      <button type="submit" className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full" >
         Send Code
       </button>
     </form>
@@ -236,18 +303,8 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
         We sent an email to <strong>{sentEmail}</strong>. Check your email, and
         paste the code you see.
       </p>
-      <input
-        ref={inputRef}
-        type="text"
-        className="border border-gray-300 px-3 py-1  w-full"
-        placeholder="123456..."
-        required
-        autoFocus
-      />
-      <button
-        type="submit"
-        className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full"
-      >
+      <input ref={inputRef} type="text" className="border border-gray-300 px-3 py-1  w-full" placeholder="123456..." required autoFocus />
+      <button type="submit" className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full" >
         Verify Code
       </button>
     </form>
@@ -258,129 +315,124 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
 
 // Write Data
 // ---------
-function addTodo(text: string) {
+function addPost(text: string, authorId: string | undefined) {
   db.transact(
-    db.tx.todos[id()].update({
+    // IMPORTANT: ids must be a valid UUID, so we use `id()` to generate one
+    db.tx.posts[id()].update({
       text,
-      done: false,
       createdAt: Date.now(),
-    })
+    }).link({ author: authorId })
   );
 }
 
-function deleteTodo(todo: Todo) {
-  db.transact(db.tx.todos[todo.id].delete());
-}
-
-function toggleDone(todo: Todo) {
-  db.transact(db.tx.todos[todo.id].update({ done: !todo.done }));
-}
-
-function deleteCompleted(todos: Todo[]) {
-  const completed = todos.filter((todo) => todo.done);
-  const txs = completed.map((todo) => db.tx.todos[todo.id].delete());
-  db.transact(txs);
-}
-
-function toggleAll(todos: Todo[]) {
-  const newVal = !todos.every((todo) => todo.done);
-  db.transact(
-    todos.map((todo) => db.tx.todos[todo.id].update({ done: newVal }))
-  );
+function deletePost(postId: string) {
+  db.transact(db.tx.posts[postId].delete());
 }
 
 
-// Components
-// ----------
-function ChevronDownIcon() {
+// 
+// ---------
+function makeShout(text: string) {
+  const maxX = window.innerWidth - 200; // Leave some margin
+  const maxY = window.innerHeight - 100;
+  return {
+    text,
+    x: Math.random() * maxX,
+    y: Math.random() * maxY,
+    angle: (Math.random() - 0.5) * 30,
+    size: Math.random() * 20 + 18,
+  };
+}
+
+function addShout({ text, x, y, angle, size }: { text: string, x: number, y: number, angle: number, size: number }) {
+  const shoutElement = document.createElement('div');
+  shoutElement.textContent = text;
+  shoutElement.style.cssText = `
+    left: ${x}px;
+    top: ${y}px;
+    position: fixed;
+    z-index: 9999;
+    font-size: ${size}px;
+    font-weight: bold;
+    pointer-events: none;
+    transition: opacity 2s ease-out;
+    opacity: 1;
+    font-family: system-ui, -apple-system, sans-serif;
+    white-space: nowrap;
+    transform: rotate(${angle}deg);
+  `;
+  document.body.appendChild(shoutElement);
+  setTimeout(() => {
+    shoutElement.style.opacity = '0';
+  }, 100);
+  setTimeout(() => {
+    shoutElement.remove();
+  }, 2100);
+}
+
+function PostForm() {
+  const { user } = db.useAuth();
+  const [value, setValue] = useState("");
+
+  // IMPORTANT: usePublishTopic returns a function that can be used to publish
+  // a message to a topic
+  const publishShout = db.rooms.usePublishTopic(room, 'shout');
+
+  const handleSubmit = (action: string) => {
+    if (action === 'post') {
+      addPost(value, user?.id);
+    } else {
+      const params = makeShout(value);
+      addShout(params);
+      publishShout(params);
+    }
+    setValue("");
+  };
+
   return (
-    <svg viewBox="0 0 20 20">
-      <path
-        d="M5 8 L10 13 L15 8"
-        stroke="currentColor"
-        fill="none"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-function TodoForm({ todos }: { todos: Todo[] }) {
-  return (
-    <div className="flex items-center h-10 border-b border-gray-300">
-      <button
-        className="h-full px-2 border-r border-gray-300 flex items-center justify-center"
-        onClick={() => toggleAll(todos)}
-      >
-        <div className="w-5 h-5">
-          <ChevronDownIcon />
-        </div>
-      </button>
-      <form
-        className="flex-1 h-full"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const input = e.currentTarget.input as HTMLInputElement;
-          addTodo(input.value);
-          input.value = "";
-        }}
-      >
+    <div className="flex flex-col">
+      <div className="flex items-center h-10 border-b border-gray-300">
         <input
-          className="w-full h-full px-2 outline-none bg-transparent"
+          className="flex-1 h-full px-2 outline-none bg-transparent"
           autoFocus
-          placeholder="What needs to be done?"
+          placeholder="What do you want to say?"
           type="text"
-          name="input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
         />
-      </form>
-    </div>
+      </div>
+      <div className="flex justify-around border-gray-300 h-6">
+        <button
+          className="px-3 hover:bg-gray-100"
+          onClick={() => handleSubmit('post')}
+        >
+          Post
+        </button>
+        <button
+          className="px-3 hover:bg-gray-100"
+          onClick={() => handleSubmit('shout')}
+        >
+          Shout
+        </button>
+      </div>
+    </div >
   );
 }
 
-function TodoList({ todos }: { todos: Todo[] }) {
+function PostList({ posts }: { posts: PostsWithProfile[] }) {
+  const { user } = db.useAuth();
   return (
     <div className="divide-y divide-gray-300">
-      {todos.map((todo) => (
-        <div key={todo.id} className="flex items-center h-10">
-          <div className="h-full px-2 flex items-center justify-center">
-            <div className="w-5 h-5 flex items-center justify-center">
-              <input
-                type="checkbox"
-                className="cursor-pointer"
-                checked={todo.done}
-                onChange={() => toggleDone(todo)}
-              />
-            </div>
-          </div>
-          <div className="flex-1 px-2 overflow-hidden flex items-center">
-            {todo.done ? (
-              <span className="line-through">{todo.text}</span>
-            ) : (
-              <span>{todo.text}</span>
+      {posts.map((post) => (
+        <div key={post.id} className="flex items-center h-10">
+          <div className="flex-1 px-2 overflow-hidden flex justify-between items-center">
+            <span>{post.text}</span>
+            {post.author?.id === user?.id && (
+              <button onClick={() => deletePost(post.id)} className="text-xs text-gray-500 hover:cursor-pointer">x</button>
             )}
           </div>
-          <button
-            className="h-full px-2 flex items-center justify-center text-gray-300 hover:text-gray-500"
-            onClick={() => deleteTodo(todo)}
-          >
-            X
-          </button>
         </div>
       ))}
-    </div>
-  );
-}
-
-function ActionBar({ todos }: { todos: Todo[] }) {
-  return (
-    <div className="flex justify-between items-center h-10 px-2 text-xs border-t border-gray-300">
-      <div>Remaining todos: {todos.filter((todo) => !todo.done).length}</div>
-      <button
-        className=" text-gray-300 hover:text-gray-500"
-        onClick={() => deleteCompleted(todos)}
-      >
-        Delete Completed
-      </button>
     </div>
   );
 }
