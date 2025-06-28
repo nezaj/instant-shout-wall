@@ -7,7 +7,7 @@ import db from "../lib/db";
 import schema from "../instant.schema";
 
 type ProfileWithAvatar = InstaQLEntity<typeof schema, "profiles", { avatar: {} }>;
-type PostsWithProfile = InstaQLEntity<typeof schema, "posts", { author: {} }>;
+type PostsWithProfile = InstaQLEntity<typeof schema, "posts", { author: { avatar: {} } }>;
 
 interface AuthProfileContextValue {
   user: User | null | undefined;
@@ -108,8 +108,6 @@ function ProfileAvatar({ profile, user }: { profile: ProfileWithAvatar, user: Us
 
   const handleAvatarDelete = async () => {
     if (!profile.avatar) return;
-    // IMPORTANT: lookup lets you find the id by a field value. This only works if the
-    // field is unqiue
     db.transact(db.tx.$files[lookup("path", avatarPath)].delete());
   }
 
@@ -119,10 +117,7 @@ function ProfileAvatar({ profile, user }: { profile: ProfileWithAvatar, user: Us
 
     setIsUploading(true);
     try {
-      // Upload file with user-specific path
       const { data } = await db.storage.uploadFile(avatarPath, file);
-
-      // Link to profile
       await db.transact(
         db.tx.profiles[profile.id].link({ avatar: data.id })
       );
@@ -133,16 +128,16 @@ function ProfileAvatar({ profile, user }: { profile: ProfileWithAvatar, user: Us
   };
 
   return (
-    <div className="flex items-center space-x-3 p-4">
+    <div className="flex items-center gap-4">
       <label className="relative cursor-pointer">
         {profile.avatar ? (
           <img
             src={profile.avatar.url}
             alt={profile.handle}
-            className="w-12 h-12 rounded-full object-cover"
+            className="w-16 h-16 rounded-full object-cover border-2 border-gray-800"
           />
         ) : (
-          <div className="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-gray-800 font-bold text-xl border-2 border-gray-800">
             {profile.handle[0].toUpperCase()}
           </div>
         )}
@@ -161,60 +156,97 @@ function ProfileAvatar({ profile, user }: { profile: ProfileWithAvatar, user: Us
           disabled={isUploading}
         />
       </label>
-      <div>
-        <div>Profile: {profile.handle}</div>
-        <div>Email: {user.email}</div>
+      <div className="flex flex-col">
+        <div className="font-medium">handle: {profile.handle}</div>
+        <div className="text-sm">email: {user.email}</div>
         <button
           onClick={handleAvatarDelete}
-          className="text-red-500 hover:text-red-700 disabled:text-gray-400 hover:cursor-pointer disabled:hover:cursor-not-allowed"
+          className="text-gray-500 text-sm text-left hover:text-gray-700 disabled:text-gray-400"
           disabled={!profile.avatar || isUploading}>
           Delete Avatar
         </button>
-
       </div>
     </div>
   );
 }
 
 function Main({ user, profile }: { user: User, profile: ProfileWithAvatar }) {
+  const [pageNumber, setPageNumber] = useState(1);
+  const pageSize = 5;
   const { isLoading, error, data } = db.useQuery({
-    todos: {},
     posts: {
       $: {
         order: { createdAt: "desc" },
-        limit: 10,
+        limit: pageSize,
+        offset: (pageNumber - 1) * pageSize,
       },
-      author: {},
+      author: {
+        avatar: {},
+      },
     },
   });
 
-  // IMPORTANT: usePresence is how you subscribe to presence data
   const { peers } = db.rooms.usePresence(room);
   const numUsers = 1 + Object.keys(peers).length;
 
-  // IMPORTANT: useTopicEffect is how you react to topic messages
   db.rooms.useTopicEffect(room, 'shout', (message) => {
     addShout(message);
   });
 
-  if (isLoading) {
-    return;
-  }
-  if (error) {
-    return <div className="text-red-500 p-4">Error: {error.message}</div>;
-  }
+  if (isLoading) { return; }
+  if (error) { return <div className="text-red-500 p-4">Error: {error.message}</div>; }
   const { posts } = data;
-  return (
 
-    <div>
-      <ProfileAvatar profile={profile} user={user} />
-      <div className="font-mono flex items-center flex-col space-y-4">
-        <div className="text-xs text-gray-500">
-          Number of users online: {numUsers}
+  // Load the next page by increasing the page number, which will
+  // increase the offset by the page size.
+  const loadNextPage = () => {
+    setPageNumber(pageNumber + 1);
+  };
+
+  // Load the previous page by decreasing the page number, which will
+  // decrease the offset by the page size.
+  const loadPreviousPage = () => {
+    setPageNumber(pageNumber - 1);
+  };
+
+  return (
+    <div className="min-h-screen p-4">
+      <div className="max-w-4xl mx-auto bg-white rounded-lg p-6">
+        <div className="flex justify-between items-start mb-6">
+          <ProfileAvatar profile={profile} user={user} />
+          <button
+            onClick={() => db.auth.signOut()}
+            className="text-sm text-gray-600 hover:text-gray-800"
+          >
+            Sign out
+          </button>
         </div>
-        <div className="border border-gray-300 max-w-xs w-full">
+
+        <div className="mb-6">
           <PostForm />
+        </div>
+
+        <div className="space-y-4">
           <PostList posts={posts} />
+        </div>
+        <div className="flex justify-between items-center mt-6">
+          <button
+            onClick={loadPreviousPage}
+            disabled={pageNumber <= 1}
+            className={`px-4 py-2 bg-gray-200 rounded ${pageNumber <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Previous
+          </button>
+          <button
+            onClick={loadNextPage}
+            disabled={posts.length < pageSize}
+            className={`px-4 py-2 bg-gray-200 rounded ${posts.length < pageSize ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Next
+          </button>
+        </div>
+        <div className="text-xs text-gray-500 mt-4 text-center">
+          {numUsers} user{numUsers > 1 ? 's' : ''} online
         </div>
       </div>
     </div>
@@ -374,11 +406,11 @@ function PostForm() {
   const { user } = db.useAuth();
   const [value, setValue] = useState("");
 
-  // IMPORTANT: usePublishTopic returns a function that can be used to publish
-  // a message to a topic
   const publishShout = db.rooms.usePublishTopic(room, 'shout');
 
   const handleSubmit = (action: string) => {
+    if (!value.trim()) return;
+
     if (action === 'post') {
       addPost(value, user?.id);
     } else {
@@ -390,46 +422,71 @@ function PostForm() {
   };
 
   return (
-    <div className="flex flex-col">
-      <div className="flex items-center h-10 border-b border-gray-300">
-        <input
-          className="flex-1 h-full px-2 outline-none bg-transparent"
-          autoFocus
-          placeholder="What do you want to say?"
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-        />
-      </div>
-      <div className="flex justify-around border-gray-300 h-6">
+    <div className="space-y-3">
+      <input
+        className="w-full px-4 py-3 border-2 border-gray-800 rounded-lg focus:outline-none focus:border-gray-600"
+        autoFocus
+        placeholder="What's on your mind?"
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyPress={(e) => e.key === 'Enter' && handleSubmit('post')}
+      />
+      <div className="flex gap-3">
         <button
-          className="px-3 hover:bg-gray-100"
+          className="px-6 py-2 bg-white border-2 border-gray-800 rounded-full hover:bg-gray-100 font-medium"
           onClick={() => handleSubmit('post')}
         >
-          Post
+          Add to wall
         </button>
         <button
-          className="px-3 hover:bg-gray-100"
+          className="px-6 py-2 bg-white border-2 border-gray-800 rounded-full hover:bg-gray-100 font-medium"
           onClick={() => handleSubmit('shout')}
         >
-          Shout
+          Shout to void
         </button>
       </div>
-    </div >
+    </div>
   );
 }
 
 function PostList({ posts }: { posts: PostsWithProfile[] }) {
   const { user } = db.useAuth();
   return (
-    <div className="divide-y divide-gray-300">
+    <div className="space-y-3">
       {posts.map((post) => (
-        <div key={post.id} className="flex items-center h-10">
-          <div className="flex-1 px-2 overflow-hidden flex justify-between items-center">
-            <span>{post.text}</span>
-            {post.author?.id === user?.id && (
-              <button onClick={() => deletePost(post.id)} className="text-xs text-gray-500 hover:cursor-pointer">x</button>
-            )}
+        <div key={post.id} className="border-2 border-gray-800 rounded-lg p-4 bg-white">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-800 font-bold border-2 border-gray-800 flex-shrink-0">
+              {post.author?.avatar ? (
+                <img
+                  className="w-full h-full rounded-full object-cover"
+                  src={post.author.avatar.url}
+                  alt={post.author.handle}
+                />
+              ) : (
+                <span>{post.author?.handle[0].toUpperCase()}</span>
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="font-medium">{post.author?.handle || 'Unknown'}</div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(post.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                {post.author?.id === user?.id && (
+                  <button
+                    onClick={() => deletePost(post.id)}
+                    className="text-gray-400 hover:text-gray-600 text-sm"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 text-gray-800">{post.text}</div>
+            </div>
           </div>
         </div>
       ))}
