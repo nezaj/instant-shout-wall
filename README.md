@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Instant Shout Wall
+![Instant Shout preview](public/screenshot.png)
 
-## Getting Started
+This is a demo app built with [InstantDB](https://instantdb.com), Next.js, and TailwindCSS with the following features:
 
-First, run the development server:
+* Initiailizes a connection to InstantDB
+* Defines schema and permissions for the app
+* Authentication with magic codes
+* Reads and writes data via `db.useQuery` and `db.transact`
+* Ephemeral features like who's online and shout
+* File uploads for avatars
 
+Logic is split across four files:
+
+* `app/page.tsx` - Main logic, mostly UI with some Instant magic :)
+* `lib/db.ts` -- InstantDB client setup
+* `instant.schema.ts` - InstantDB schema, gives you type safety for your data!
+* `instant.perms.ts` - InstantDB permissions, not required for this app, but we still included to show how to restrict access to your data.
+
+[See it live](https://instant-shout-wall.vercel.app/)
+
+## Quick Start
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Clone repo and install dependencies
+pnpx create-next-app instant-shout-wall -e https://github.com/nezaj/instant-shout
+cd instant-shout-wall
+
+# Create a new InstantDB project
+pnpx instant-cli@latest login # Login to your InstantDB account
+pnpx instant-cli@latest create-app # Paste your app id into env.local
+
+# After copying the app id from the previous step into .env.local run the
+# following command to push the schema and permissions to InstantDB
+pnpx instant-cli@latest push
+
+# Run the app
+pnpm run dev
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

@@ -18,11 +18,6 @@ const _schema = i.schema({
       text: i.string(),
       createdAt: i.number().indexed(),
     }),
-    todos: i.entity({
-      text: i.string(),
-      done: i.boolean(),
-      createdAt: i.number(),
-    }),
   },
   links: {
     userProfiles: {

@@ -1,22 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import { id, lookup, InstaQLEntity, User } from "@instantdb/react";
 
 import db from "../lib/db";
 import schema from "../instant.schema";
 
+// Instant utility types for query results
 type ProfileWithAvatar = InstaQLEntity<typeof schema, "profiles", { avatar: {} }>;
 type PostsWithProfile = InstaQLEntity<typeof schema, "posts", { author: { avatar: {} } }>;
-
-interface AuthProfileContextValue {
-  user: User | null | undefined;
-  profile: ProfileWithAvatar | undefined;
-  isLoading: boolean;
-  error: { message: string } | undefined;
-}
-
-const AuthProfileContext = React.createContext<AuthProfileContextValue | null>(null);
 
 function randomHandle() {
   const adjectives = ["Quick", "Lazy", "Happy", "Sad", "Bright", "Dark"];
@@ -27,6 +19,8 @@ function randomHandle() {
   return `${randomAdjective}${randomNoun}${randomSuffix}`;
 }
 
+// Write Data
+// ---------
 async function createProfile(userId: string) {
   // IMPORTANT: transact is how you write data to the database
   // We want to block until the profile is created, so we use await
@@ -37,142 +31,89 @@ async function createProfile(userId: string) {
   );
 }
 
-function AuthProfileProvider({ children }: { children: React.ReactNode }) {
-  const { isLoading: authLoading, user, error: authError } = db.useAuth();
-  // useQuery is how you subscribe to DB data
-  const { isLoading: profileLoading, data, error: profileError } = db.useQuery(
-    // We can use a conditional query to fetch the profile only if the user is
-    // logged in
-    user ? {
-      profiles: {
-        $: {
-          where: { "user.id": user.id },
-        },
-        avatar: {}
-      },
-    } : null
+function addPost(text: string, authorId: string | undefined) {
+  db.transact(
+    // IMPORTANT: ids must be a valid UUID, so we use `id()` to generate one
+    db.tx.posts[id()].update({
+      text,
+      createdAt: Date.now(),
+    }).link({ author: authorId })
   );
+}
 
+function deletePost(postId: string) {
+  db.transact(db.tx.posts[postId].delete());
+}
+
+// Ephemeral helpers
+// ---------
+function makeShout(text: string) {
+  const maxX = window.innerWidth - 200; // Leave some margin
+  const maxY = window.innerHeight - 100;
+  return {
+    text,
+    x: Math.random() * maxX,
+    y: Math.random() * maxY,
+    angle: (Math.random() - 0.5) * 30,
+    size: Math.random() * 20 + 18,
+  };
+}
+
+function addShout({ text, x, y, angle, size }: { text: string, x: number, y: number, angle: number, size: number }) {
+  const shoutElement = document.createElement('div');
+  shoutElement.textContent = text;
+  shoutElement.style.cssText = `
+    left: ${x}px;
+    top: ${y}px;
+    position: fixed;
+    z-index: 9999;
+    font-size: ${size}px;
+    font-weight: bold;
+    pointer-events: none;
+    transition: opacity 2s ease-out;
+    opacity: 1;
+    font-family: system-ui, -apple-system, sans-serif;
+    white-space: nowrap;
+    transform: rotate(${angle}deg);
+  `;
+  document.body.appendChild(shoutElement);
+  setTimeout(() => {
+    shoutElement.style.opacity = '0';
+  }, 100);
+  setTimeout(() => {
+    shoutElement.remove();
+  }, 2100);
+}
+
+// Instant query Hooks
+// ---------
+function useProfile() {
+  const { user } = db.useAuth();
+  if (!user) {
+    throw new Error("useProfile must be used after auth");
+
+  }
+  const { data, isLoading, error } = db.useQuery({
+    profiles: {
+      $: { where: { "user.id": user.id } },
+      avatar: {},
+    }
+  });
   const profile = data?.profiles?.[0];
 
-  // We create a profile if it doesn't exist. We use the profile namespace to
-  // connect user data to other namespaces like $files
-  useEffect(() => {
-    if (!user || profileLoading || profile) return;
-    createProfile(user.id);
-  }, [user, profileLoading, profile]);
-
-  const value = {
-    user,
-    profile,
-    isLoading: authLoading || !!(user && !profile),
-    error: authError || profileError,
-  };
-
-  return (
-    <AuthProfileContext.Provider value={value}>
-      {children}
-    </AuthProfileContext.Provider>
-  );
+  return { profile, isLoading, error };
 }
 
-export function useAuthProfile() {
-  const context = useContext(AuthProfileContext);
-  if (!context) {
-    throw new Error("useAuthProfile must be used within AuthProfileProvider");
+function useAuthAndProfile(): { user: User, profile: ProfileWithAvatar } {
+  const { user } = db.useAuth();
+  const { profile } = useProfile();
+  if (!user || !profile) {
+    throw new Error("useAuthAndProfile must be used after auth and profile are loaded");
   }
-  return context;
+  return { user, profile }
 }
 
-const room = db.room("todos", "main");
-
-function App() {
-  return (
-    <AuthProfileProvider>
-      <AppContent />
-    </AuthProfileProvider>
-  )
-}
-
-function AppContent() {
-  const { user, profile, isLoading, error } = useAuthProfile();
-  if (isLoading) { return; }
-  if (error) { return <div className="p-4 text-red-500">Uh oh! {error.message}</div>; }
-  if (user && profile) { return <Main user={user} profile={profile} />; }
-  return <Login />;
-}
-
-function ProfileAvatar({ profile, user }: { profile: ProfileWithAvatar, user: User }) {
-  const [isUploading, setIsUploading] = useState(false);
-  const avatarPath = `${user.id}/avatar`;
-
-  const handleAvatarDelete = async () => {
-    if (!profile.avatar) return;
-    db.transact(db.tx.$files[lookup("path", avatarPath)].delete());
-  }
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const { data } = await db.storage.uploadFile(avatarPath, file);
-      await db.transact(
-        db.tx.profiles[profile.id].link({ avatar: data.id })
-      );
-    } catch (error) {
-      console.error('Upload failed:', error);
-    }
-    setIsUploading(false);
-  };
-
-  return (
-    <div className="flex items-center gap-4">
-      <label className="relative cursor-pointer">
-        {profile.avatar ? (
-          <img
-            src={profile.avatar.url}
-            alt={profile.handle}
-            className="w-16 h-16 rounded-full object-cover border-2 border-gray-800"
-          />
-        ) : (
-          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-gray-800 font-bold text-xl border-2 border-gray-800">
-            {profile.handle[0].toUpperCase()}
-          </div>
-        )}
-
-        {isUploading && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleAvatarUpload}
-          className="hidden"
-          disabled={isUploading}
-        />
-      </label>
-      <div className="flex flex-col">
-        <div className="font-medium">handle: {profile.handle}</div>
-        <div className="text-sm">email: {user.email}</div>
-        <button
-          onClick={handleAvatarDelete}
-          className="text-gray-500 text-sm text-left hover:text-gray-700 disabled:text-gray-400"
-          disabled={!profile.avatar || isUploading}>
-          Delete Avatar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Main({ user, profile }: { user: User, profile: ProfileWithAvatar }) {
-  const [pageNumber, setPageNumber] = useState(1);
-  const pageSize = 5;
+function usePosts(pageNumber: number, pageSize: number) {
   const { isLoading, error, data } = db.useQuery({
     posts: {
       $: {
@@ -186,71 +127,19 @@ function Main({ user, profile }: { user: User, profile: ProfileWithAvatar }) {
     },
   });
 
-  const { peers } = db.rooms.usePresence(room);
-  const numUsers = 1 + Object.keys(peers).length;
+  return { isLoading, error, posts: data?.posts || [] };
+}
 
-  db.rooms.useTopicEffect(room, 'shout', (message) => {
-    addShout(message);
-  });
+// Auth Components
+// ---------
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { user, isLoading, error } = db.useAuth();
 
-  if (isLoading) { return; }
-  if (error) { return <div className="text-red-500 p-4">Error: {error.message}</div>; }
-  const { posts } = data;
+  if (isLoading) return null;
+  if (error) return <div className="p-4 text-red-500">Auth error: {error.message}</div>;
+  if (!user) return <Login />;
 
-  // Load the next page by increasing the page number, which will
-  // increase the offset by the page size.
-  const loadNextPage = () => {
-    setPageNumber(pageNumber + 1);
-  };
-
-  // Load the previous page by decreasing the page number, which will
-  // decrease the offset by the page size.
-  const loadPreviousPage = () => {
-    setPageNumber(pageNumber - 1);
-  };
-
-  return (
-    <div className="min-h-screen p-4">
-      <div className="max-w-4xl mx-auto bg-white rounded-lg p-6">
-        <div className="flex justify-between items-start mb-6">
-          <ProfileAvatar profile={profile} user={user} />
-          <button
-            onClick={() => db.auth.signOut()}
-            className="text-sm text-gray-600 hover:text-gray-800"
-          >
-            Sign out
-          </button>
-        </div>
-
-        <div className="mb-6">
-          <PostForm />
-        </div>
-
-        <div className="space-y-4">
-          <PostList posts={posts} />
-        </div>
-        <div className="flex justify-between items-center mt-6">
-          <button
-            onClick={loadPreviousPage}
-            disabled={pageNumber <= 1}
-            className={`px-4 py-2 bg-gray-200 rounded ${pageNumber <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            Previous
-          </button>
-          <button
-            onClick={loadNextPage}
-            disabled={posts.length < pageSize}
-            className={`px-4 py-2 bg-gray-200 rounded ${posts.length < pageSize ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            Next
-          </button>
-        </div>
-        <div className="text-xs text-gray-500 mt-4 text-center">
-          {numUsers} user{numUsers > 1 ? 's' : ''} online
-        </div>
-      </div>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 function Login() {
@@ -343,64 +232,165 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
   );
 }
 
+function EnsureProfile({ children }: { children: React.ReactNode }) {
+  const { user } = db.useAuth();
+  const { isLoading, profile, error } = useProfile();
 
+  useEffect(() => {
+    if (!isLoading && !profile) {
+      createProfile(user!.id);
+    }
+  }, [user, isLoading, profile]);
 
-// Write Data
+  if (isLoading) return null;
+  if (error) return <div className="p-4 text-red-500">Profile error: {error.message}</div>;
+  if (!profile) return null; // Still creating profile...
+
+  return <>{children}</>;
+}
+
+// Use the room for presence and topics
+const room = db.room("todos", "main");
+
+// App Components
 // ---------
-function addPost(text: string, authorId: string | undefined) {
-  db.transact(
-    // IMPORTANT: ids must be a valid UUID, so we use `id()` to generate one
-    db.tx.posts[id()].update({
-      text,
-      createdAt: Date.now(),
-    }).link({ author: authorId })
+function Main() {
+  const [pageNumber, setPageNumber] = useState(1);
+  const pageSize = 5;
+  const { isLoading, error, posts } = usePosts(pageNumber, pageSize);
+
+  const { peers } = db.rooms.usePresence(room);
+  const numUsers = 1 + Object.keys(peers).length;
+
+  db.rooms.useTopicEffect(room, 'shout', (message) => {
+    addShout(message);
+  });
+
+  if (isLoading) { return; }
+  if (error) { return <div className="text-red-500 p-4">Error: {error.message}</div>; }
+
+  const loadNextPage = () => {
+    setPageNumber(pageNumber + 1);
+  };
+
+  const loadPreviousPage = () => {
+    setPageNumber(pageNumber - 1);
+  };
+
+  return (
+    <div className="min-h-screen p-4">
+      <div className="max-w-4xl mx-auto bg-white rounded-lg p-6">
+        <div className="flex justify-between items-start mb-6">
+          <ProfileAvatar />
+          <button
+            onClick={() => db.auth.signOut()}
+            className="text-sm text-gray-600 hover:text-gray-800"
+          >
+            Sign out
+          </button>
+        </div>
+
+        <div className="mb-6">
+          <PostForm />
+        </div>
+
+        <div className="space-y-4">
+          <PostList posts={posts} />
+        </div>
+        <div className="flex justify-between items-center mt-6">
+          <button
+            onClick={loadPreviousPage}
+            disabled={pageNumber <= 1}
+            className={`px-4 py-2 bg-gray-200 rounded ${pageNumber <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Previous
+          </button>
+          <button
+            onClick={loadNextPage}
+            disabled={posts.length < pageSize}
+            className={`px-4 py-2 bg-gray-200 rounded ${posts.length < pageSize ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Next
+          </button>
+        </div>
+        <div className="text-xs text-gray-500 mt-4 text-center">
+          {numUsers} user{numUsers > 1 ? 's' : ''} online
+        </div>
+      </div>
+    </div>
   );
 }
 
-function deletePost(postId: string) {
-  db.transact(db.tx.posts[postId].delete());
-}
+function ProfileAvatar() {
+  const { user, profile } = useAuthAndProfile();
+  const [isUploading, setIsUploading] = useState(false);
+  const avatarPath = `${user!.id}/avatar`;
 
+  const handleAvatarDelete = async () => {
+    if (!profile.avatar) return;
+    db.transact(db.tx.$files[lookup("path", avatarPath)].delete());
+  }
 
-// 
-// ---------
-function makeShout(text: string) {
-  const maxX = window.innerWidth - 200; // Leave some margin
-  const maxY = window.innerHeight - 100;
-  return {
-    text,
-    x: Math.random() * maxX,
-    y: Math.random() * maxY,
-    angle: (Math.random() - 0.5) * 30,
-    size: Math.random() * 20 + 18,
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const { data } = await db.storage.uploadFile(avatarPath, file);
+      await db.transact(
+        db.tx.profiles[profile.id].link({ avatar: data.id })
+      );
+    } catch (error) {
+      console.error('Upload failed:', error);
+    }
+    setIsUploading(false);
   };
+
+  return (
+    <div className="flex items-center gap-4">
+      <label className="relative cursor-pointer">
+        {profile.avatar ? (
+          <img
+            src={profile.avatar.url}
+            alt={profile.handle}
+            className="w-16 h-16 rounded-full object-cover border-2 border-gray-800"
+          />
+        ) : (
+          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-gray-800 font-bold text-xl border-2 border-gray-800">
+            {profile.handle[0].toUpperCase()}
+          </div>
+        )}
+
+        {isUploading && (
+          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleAvatarUpload}
+          className="hidden"
+          disabled={isUploading}
+        />
+      </label>
+      <div className="flex flex-col">
+        <div className="font-medium">handle: {profile.handle}</div>
+        <div className="text-sm">email: {user.email}</div>
+        <button
+          onClick={handleAvatarDelete}
+          className="text-gray-500 text-sm text-left hover:text-gray-700 disabled:text-gray-400"
+          disabled={!profile.avatar || isUploading}>
+          Delete Avatar
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function addShout({ text, x, y, angle, size }: { text: string, x: number, y: number, angle: number, size: number }) {
-  const shoutElement = document.createElement('div');
-  shoutElement.textContent = text;
-  shoutElement.style.cssText = `
-    left: ${x}px;
-    top: ${y}px;
-    position: fixed;
-    z-index: 9999;
-    font-size: ${size}px;
-    font-weight: bold;
-    pointer-events: none;
-    transition: opacity 2s ease-out;
-    opacity: 1;
-    font-family: system-ui, -apple-system, sans-serif;
-    white-space: nowrap;
-    transform: rotate(${angle}deg);
-  `;
-  document.body.appendChild(shoutElement);
-  setTimeout(() => {
-    shoutElement.style.opacity = '0';
-  }, 100);
-  setTimeout(() => {
-    shoutElement.remove();
-  }, 2100);
-}
+
 
 function PostForm() {
   const { user } = db.useAuth();
@@ -430,7 +420,7 @@ function PostForm() {
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onKeyPress={(e) => e.key === 'Enter' && handleSubmit('post')}
+        onKeyDown={(e) => e.key === 'Enter' && handleSubmit('post')}
       />
       <div className="flex gap-3">
         <button
@@ -491,6 +481,16 @@ function PostList({ posts }: { posts: PostsWithProfile[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthGate>
+      <EnsureProfile>
+        <Main />
+      </EnsureProfile>
+    </AuthGate>
   );
 }
 
