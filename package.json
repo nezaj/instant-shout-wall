@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "format": "prettier --write --ignore-path .gitignore --config ./.prettierrc \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

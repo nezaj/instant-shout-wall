@@ -1,6 +1,6 @@
 // Docs: https://www.instantdb.com/docs/modeling-data
 
-import { i } from "@instantdb/react";
+import { i } from '@instantdb/react';
 
 const _schema = i.schema({
   entities: {
@@ -21,17 +21,17 @@ const _schema = i.schema({
   },
   links: {
     userProfiles: {
-      forward: { on: "profiles", has: "one", label: "user" },
-      reverse: { on: "$users", has: "one", label: "profile" },
+      forward: { on: 'profiles', has: 'one', label: 'user' },
+      reverse: { on: '$users', has: 'one', label: 'profile' },
     },
     postAuthors: {
-      forward: { on: "posts", has: "one", label: "author", required: true },
-      reverse: { on: "profiles", has: "many", label: "posts" },
+      forward: { on: 'posts', has: 'one', label: 'author', required: true },
+      reverse: { on: 'profiles', has: 'many', label: 'posts' },
     },
     profileAvatars: {
-      forward: { on: "profiles", has: "one", label: "avatar" },
-      reverse: { on: "$files", has: "one", label: "profile" },
-    }
+      forward: { on: 'profiles', has: 'one', label: 'avatar' },
+      reverse: { on: '$files', has: 'one', label: 'profile' },
+    },
   },
   rooms: {
     todos: {
@@ -43,15 +43,15 @@ const _schema = i.schema({
           y: i.number(),
           angle: i.number(),
           size: i.number(),
-        })
+        }),
       },
-    }
+    },
   },
 });
 
 // This helps Typescript display nicer intellisense
 type _AppSchema = typeof _schema;
-interface AppSchema extends _AppSchema { }
+interface AppSchema extends _AppSchema {}
 const schema: AppSchema = _schema;
 
 export type { AppSchema };

@@ -1,20 +1,25 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { id, lookup, InstaQLEntity, User } from "@instantdb/react";
+import React, { useState, useEffect } from 'react';
+import { id, lookup, InstaQLEntity, User } from '@instantdb/react';
 
-import db from "../lib/db";
-import schema from "../instant.schema";
+import db from '../lib/db';
+import schema from '../instant.schema';
 
 // Instant utility types for query results
-type PostsWithProfile = InstaQLEntity<typeof schema, "posts", { author: { avatar: {} } }>;
+type PostsWithProfile = InstaQLEntity<
+  typeof schema,
+  'posts',
+  { author: { avatar: {} } }
+>;
 
 function randomHandle() {
-  const adjectives = ["Quick", "Lazy", "Happy", "Sad", "Bright", "Dark"];
-  const nouns = ["Fox", "Dog", "Cat", "Bird", "Fish", "Mouse"];
-  const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const adjectives = ['Quick', 'Lazy', 'Happy', 'Sad', 'Bright', 'Dark'];
+  const nouns = ['Fox', 'Dog', 'Cat', 'Bird', 'Fish', 'Mouse'];
+  const randomAdjective =
+    adjectives[Math.floor(Math.random() * adjectives.length)];
   const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-  const randomSuffix = Math.floor(Math.random() * 9000) + 1000
+  const randomSuffix = Math.floor(Math.random() * 9000) + 1000;
   return `${randomAdjective}${randomNoun}${randomSuffix}`;
 }
 
@@ -24,19 +29,23 @@ async function createProfile(userId: string) {
   // IMPORTANT: transact is how you write data to the database
   // We want to block until the profile is created, so we use await
   await db.transact(
-    db.tx.profiles[userId].update({
-      handle: randomHandle(),
-    }).link({ user: userId })
+    db.tx.profiles[userId]
+      .update({
+        handle: randomHandle(),
+      })
+      .link({ user: userId }),
   );
 }
 
 function addPost(text: string, authorId: string | undefined) {
   db.transact(
     // IMPORTANT: ids must be a valid UUID, so we use `id()` to generate one
-    db.tx.posts[id()].update({
-      text,
-      createdAt: Date.now(),
-    }).link({ author: authorId })
+    db.tx.posts[id()]
+      .update({
+        text,
+        createdAt: Date.now(),
+      })
+      .link({ author: authorId }),
   );
 }
 
@@ -58,7 +67,19 @@ function makeShout(text: string) {
   };
 }
 
-function addShout({ text, x, y, angle, size }: { text: string, x: number, y: number, angle: number, size: number }) {
+function addShout({
+  text,
+  x,
+  y,
+  angle,
+  size,
+}: {
+  text: string;
+  x: number;
+  y: number;
+  angle: number;
+  size: number;
+}) {
   const shoutElement = document.createElement('div');
   shoutElement.textContent = text;
   shoutElement.style.cssText = `
@@ -90,9 +111,9 @@ function useProfile() {
   const user = db.useUser();
   const { data, isLoading, error } = db.useQuery({
     profiles: {
-      $: { where: { "user.id": user.id } },
+      $: { where: { 'user.id': user.id } },
       avatar: {},
-    }
+    },
   });
   const profile = data?.profiles?.[0];
 
@@ -103,7 +124,7 @@ function usePosts(pageNumber: number, pageSize: number) {
   const { isLoading, error, data } = db.useQuery({
     posts: {
       $: {
-        order: { createdAt: "desc" },
+        order: { createdAt: 'desc' },
         limit: pageSize,
         offset: (pageNumber - 1) * pageSize,
       },
@@ -119,7 +140,7 @@ function usePosts(pageNumber: number, pageSize: number) {
 // Auth Components
 // ---------
 function Login() {
-  const [sentEmail, setSentEmail] = useState("");
+  const [sentEmail, setSentEmail] = useState('');
 
   return (
     <div className="flex justify-center items-center min-h-screen">
@@ -142,8 +163,8 @@ function EmailStep({ onSendEmail }: { onSendEmail: (email: string) => void }) {
     const email = inputEl.value;
     onSendEmail(email);
     db.auth.sendMagicCode({ email }).catch((err) => {
-      alert("Uh oh :" + err.body?.message);
-      onSendEmail("");
+      alert('Uh oh :' + err.body?.message);
+      onSendEmail('');
     });
   };
   return (
@@ -166,11 +187,21 @@ function EmailStep({ onSendEmail }: { onSendEmail: (email: string) => void }) {
       </ul>
 
       <p className="text-gray-700">
-        To try the app, enter your email, and we'll send you a verification code. We'll create
-        an account for you too if you don't already have one.
+        To try the app, enter your email, and we'll send you a verification
+        code. We'll create an account for you too if you don't already have one.
       </p>
-      <input ref={inputRef} type="email" className="border border-gray-300 px-3 py-1  w-full" placeholder="Enter your email" required autoFocus />
-      <button type="submit" className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full" >
+      <input
+        ref={inputRef}
+        type="email"
+        className="border border-gray-300 px-3 py-1  w-full"
+        placeholder="Enter your email"
+        required
+        autoFocus
+      />
+      <button
+        type="submit"
+        className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full"
+      >
         Send Code
       </button>
     </form>
@@ -184,8 +215,8 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
     const inputEl = inputRef.current!;
     const code = inputEl.value;
     db.auth.signInWithMagicCode({ email: sentEmail, code }).catch((err) => {
-      inputEl.value = "";
-      alert("Uh oh :" + err.body?.message);
+      inputEl.value = '';
+      alert('Uh oh :' + err.body?.message);
     });
   };
 
@@ -200,8 +231,18 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
         We sent an email to <strong>{sentEmail}</strong>. Check your email, and
         paste the code you see.
       </p>
-      <input ref={inputRef} type="text" className="border border-gray-300 px-3 py-1  w-full" placeholder="123456..." required autoFocus />
-      <button type="submit" className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full" >
+      <input
+        ref={inputRef}
+        type="text"
+        className="border border-gray-300 px-3 py-1  w-full"
+        placeholder="123456..."
+        required
+        autoFocus
+      />
+      <button
+        type="submit"
+        className="px-3 py-1 bg-blue-600 text-white font-bold hover:bg-blue-700 w-full"
+      >
         Verify Code
       </button>
     </form>
@@ -219,14 +260,17 @@ function EnsureProfile({ children }: { children: React.ReactNode }) {
   }, [isLoading, profile]);
 
   if (isLoading) return null;
-  if (error) return <div className="p-4 text-red-500">Profile error: {error.message}</div>;
+  if (error)
+    return (
+      <div className="p-4 text-red-500">Profile error: {error.message}</div>
+    );
   if (!profile) return null; // Still creating profile...
 
   return <>{children}</>;
 }
 
 // Use the room for presence and topics
-const room = db.room("todos", "main");
+const room = db.room('todos', 'main');
 
 // App Components
 // ---------
@@ -242,8 +286,12 @@ function Main() {
     addShout(message);
   });
 
-  if (isLoading) { return; }
-  if (error) { return <div className="text-red-500 p-4">Error: {error.message}</div>; }
+  if (isLoading) {
+    return;
+  }
+  if (error) {
+    return <div className="text-red-500 p-4">Error: {error.message}</div>;
+  }
 
   const loadNextPage = () => {
     setPageNumber(pageNumber + 1);
@@ -277,14 +325,18 @@ function Main() {
           <button
             onClick={loadPreviousPage}
             disabled={pageNumber <= 1}
-            className={`px-4 py-2 bg-gray-200 rounded ${pageNumber <= 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`px-4 py-2 bg-gray-200 rounded ${
+              pageNumber <= 1 ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
             Previous
           </button>
           <button
             onClick={loadNextPage}
             disabled={posts.length < pageSize}
-            className={`px-4 py-2 bg-gray-200 rounded ${posts.length < pageSize ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`px-4 py-2 bg-gray-200 rounded ${
+              posts.length < pageSize ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
             Next
           </button>
@@ -305,8 +357,8 @@ function ProfileAvatar() {
 
   const handleAvatarDelete = async () => {
     if (!profile.avatar) return;
-    db.transact(db.tx.$files[lookup("path", avatarPath)].delete());
-  }
+    db.transact(db.tx.$files[lookup('path', avatarPath)].delete());
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -315,9 +367,7 @@ function ProfileAvatar() {
     setIsUploading(true);
     try {
       const { data } = await db.storage.uploadFile(avatarPath, file);
-      await db.transact(
-        db.tx.profiles[profile.id].link({ avatar: data.id })
-      );
+      await db.transact(db.tx.profiles[profile.id].link({ avatar: data.id }));
     } catch (error) {
       console.error('Upload failed:', error);
     }
@@ -359,7 +409,8 @@ function ProfileAvatar() {
         <button
           onClick={handleAvatarDelete}
           className="text-gray-500 text-sm text-left hover:text-gray-700 disabled:text-gray-400"
-          disabled={!profile.avatar || isUploading}>
+          disabled={!profile.avatar || isUploading}
+        >
           Delete Avatar
         </button>
       </div>
@@ -367,11 +418,9 @@ function ProfileAvatar() {
   );
 }
 
-
-
 function PostForm() {
   const user = db.useUser();
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState('');
 
   const publishShout = db.rooms.usePublishTopic(room, 'shout');
 
@@ -385,7 +434,7 @@ function PostForm() {
       addShout(params);
       publishShout(params);
     }
-    setValue("");
+    setValue('');
   };
 
   return (
@@ -422,7 +471,10 @@ function PostList({ posts }: { posts: PostsWithProfile[] }) {
   return (
     <div className="space-y-3">
       {posts.map((post) => (
-        <div key={post.id} className="border-2 border-gray-800 rounded-lg p-4 bg-white">
+        <div
+          key={post.id}
+          className="border-2 border-gray-800 rounded-lg p-4 bg-white"
+        >
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-800 font-bold border-2 border-gray-800 flex-shrink-0">
               {post.author?.avatar ? (
@@ -438,7 +490,9 @@ function PostList({ posts }: { posts: PostsWithProfile[] }) {
             <div className="flex-1">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="font-medium">{post.author?.handle || 'Unknown'}</div>
+                  <div className="font-medium">
+                    {post.author?.handle || 'Unknown'}
+                  </div>
                   <div className="text-xs text-gray-500">
                     {new Date(post.createdAt).toLocaleString()}
                   </div>
@@ -475,6 +529,5 @@ function App() {
     </>
   );
 }
-
 
 export default App;
