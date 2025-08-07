@@ -25,10 +25,7 @@ function randomHandle() {
 
 // Write Data
 // ---------
-async function createProfile() {
-  // IMPORTANT: useUser can only be used inside a db.SignedIn component
-  const { id: userId } = db.useUser();
-
+async function createProfile(userId: string) {
   // IMPORTANT: transact is how you write data to the database
   // We want to block until the profile is created, so we use await
   await db.transact(
@@ -262,13 +259,16 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
 }
 
 function EnsureProfile({ children }: { children: React.ReactNode }) {
+  // IMPORTANT: useUser can only be used inside a db.SignedIn component
+  const user = db.useUser();
+
   const { isLoading, profile, error } = useProfile();
 
   useEffect(() => {
     if (!isLoading && !profile) {
-      createProfile();
+      createProfile(user.id);
     }
-  }, [isLoading, profile]);
+  }, [isLoading, profile, user.id]);
 
   if (isLoading) return null;
   if (error)
