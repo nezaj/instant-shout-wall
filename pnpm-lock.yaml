@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@instantdb/react':
-    specifier: ^0.20.2
-    version: 0.20.2(react@19.1.0)
+    specifier: ^0.20.21
+    version: 0.20.21(react@19.1.0)
   next:
     specifier: 15.3.4
     version: 15.3.4(react-dom@19.1.0)(react@19.1.0)
@@ -391,20 +391,26 @@ packages:
     dev: false
     optional: true
 
-  /@instantdb/core@0.20.2:
-    resolution: {integrity: sha512-eFCb0a4eSMnodLc5SEpIXqPs+FACex1MT1Z4KinsgcMWgWNcA0PbZY45MMAY1vcHgtouqjIgyqB9eJ4/KM4CdA==}
+  /@instantdb/core@0.20.21:
+    resolution: {integrity: sha512-uXFZI++0XHaZXwoZdQE1inq89IZYOVTtvJBvHpfRyR8Gjo4HQqkzV5TJbI4Nz/NQRX/u8cQJgfyZqzMeLawFmw==}
     dependencies:
+      '@instantdb/version': 0.20.21
       mutative: 1.2.0
-      uuid: 9.0.1
+      uuid: 11.1.0
     dev: false
 
-  /@instantdb/react@0.20.2(react@19.1.0):
-    resolution: {integrity: sha512-lpNJoA72ABS75bfRVpZi4Rrfc9F+8ky8rHYaZWXg5+uMlEPrC2LCUluarQ5bUUOIi2UjZbNxLF3PIBLPd2T0ug==}
+  /@instantdb/react@0.20.21(react@19.1.0):
+    resolution: {integrity: sha512-wDjB7AdaepJMjALr5l+cSWSIX3lT5RyMCteT6l9XcLGO/ABGliNixgAGJnPtdxgfniszGAF6u4e26bKFSJmr+Q==}
     peerDependencies:
       react: '>=16'
     dependencies:
-      '@instantdb/core': 0.20.2
+      '@instantdb/core': 0.20.21
+      '@instantdb/version': 0.20.21
       react: 19.1.0
+    dev: false
+
+  /@instantdb/version@0.20.21:
+    resolution: {integrity: sha512-A+1PtPihH9X2juki3VhmfVMtIn83foq9yPiMLZ60wqBfe1AjqdOIFxFJUUuGKHEIrZ8TtLFhTSvCPY8a09JSgQ==}
     dev: false
 
   /@isaacs/fs-minipass@4.0.1:
@@ -3406,8 +3412,8 @@ packages:
       punycode: 2.3.1
     dev: true
 
-  /uuid@9.0.1:
-    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+  /uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
     hasBin: true
     dev: false
 
