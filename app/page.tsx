@@ -7,7 +7,6 @@ import db from "../lib/db";
 import schema from "../instant.schema";
 
 // Instant utility types for query results
-type ProfileWithAvatar = InstaQLEntity<typeof schema, "profiles", { avatar: {} }>;
 type PostsWithProfile = InstaQLEntity<typeof schema, "posts", { author: { avatar: {} } }>;
 
 function randomHandle() {
@@ -88,11 +87,7 @@ function addShout({ text, x, y, angle, size }: { text: string, x: number, y: num
 // Instant query Hooks
 // ---------
 function useProfile() {
-  const { user } = db.useAuth();
-  if (!user) {
-    throw new Error("useProfile must be used after auth");
-
-  }
+  const user = db.useUser();
   const { data, isLoading, error } = db.useQuery({
     profiles: {
       $: { where: { "user.id": user.id } },
@@ -102,15 +97,6 @@ function useProfile() {
   const profile = data?.profiles?.[0];
 
   return { profile, isLoading, error };
-}
-
-function useAuthAndProfile(): { user: User, profile: ProfileWithAvatar } {
-  const { user } = db.useAuth();
-  const { profile } = useProfile();
-  if (!user || !profile) {
-    throw new Error("useAuthAndProfile must be used after auth and profile are loaded");
-  }
-  return { user, profile }
 }
 
 function usePosts(pageNumber: number, pageSize: number) {
@@ -132,16 +118,6 @@ function usePosts(pageNumber: number, pageSize: number) {
 
 // Auth Components
 // ---------
-function AuthGate({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, error } = db.useAuth();
-
-  if (isLoading) return null;
-  if (error) return <div className="p-4 text-red-500">Auth error: {error.message}</div>;
-  if (!user) return <Login />;
-
-  return <>{children}</>;
-}
-
 function Login() {
   const [sentEmail, setSentEmail] = useState("");
 
@@ -233,14 +209,14 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
 }
 
 function EnsureProfile({ children }: { children: React.ReactNode }) {
-  const { user } = db.useAuth();
+  const user = db.useUser();
   const { isLoading, profile, error } = useProfile();
 
   useEffect(() => {
     if (!isLoading && !profile) {
-      createProfile(user!.id);
+      createProfile(user.id);
     }
-  }, [user, isLoading, profile]);
+  }, [isLoading, profile]);
 
   if (isLoading) return null;
   if (error) return <div className="p-4 text-red-500">Profile error: {error.message}</div>;
@@ -322,9 +298,10 @@ function Main() {
 }
 
 function ProfileAvatar() {
-  const { user, profile } = useAuthAndProfile();
+  const user = db.useUser();
+  const { profile } = useProfile();
   const [isUploading, setIsUploading] = useState(false);
-  const avatarPath = `${user!.id}/avatar`;
+  const avatarPath = `${user.id}/avatar`;
 
   const handleAvatarDelete = async () => {
     if (!profile.avatar) return;
@@ -393,7 +370,7 @@ function ProfileAvatar() {
 
 
 function PostForm() {
-  const { user } = db.useAuth();
+  const user = db.useUser();
   const [value, setValue] = useState("");
 
   const publishShout = db.rooms.usePublishTopic(room, 'shout');
@@ -441,7 +418,7 @@ function PostForm() {
 }
 
 function PostList({ posts }: { posts: PostsWithProfile[] }) {
-  const { user } = db.useAuth();
+  const user = db.useUser();
   return (
     <div className="space-y-3">
       {posts.map((post) => (
@@ -486,12 +463,18 @@ function PostList({ posts }: { posts: PostsWithProfile[] }) {
 
 function App() {
   return (
-    <AuthGate>
-      <EnsureProfile>
-        <Main />
-      </EnsureProfile>
-    </AuthGate>
+    <>
+      <db.SignedOut>
+        <Login />
+      </db.SignedOut>
+      <db.SignedIn>
+        <EnsureProfile>
+          <Main />
+        </EnsureProfile>
+      </db.SignedIn>
+    </>
   );
 }
+
 
 export default App;
