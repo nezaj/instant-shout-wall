@@ -529,14 +529,14 @@ function PostList({ posts }: { posts: PostsWithProfile[] }) {
 function App() {
   return (
     <>
-      <db.SignedOut>
-        <Login />
-      </db.SignedOut>
       <db.SignedIn>
         <EnsureProfile>
           <Main />
         </EnsureProfile>
       </db.SignedIn>
+      <db.SignedOut>
+        <Login />
+      </db.SignedOut>
     </>
   );
 }
