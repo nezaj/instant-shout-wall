@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { id, lookup, InstaQLEntity, User } from '@instantdb/react';
+import { id, lookup, InstaQLEntity } from '@instantdb/react';
 
 import db from '../lib/db';
 import schema from '../instant.schema';
@@ -25,7 +25,10 @@ function randomHandle() {
 
 // Write Data
 // ---------
-async function createProfile(userId: string) {
+async function createProfile() {
+  // IMPORTANT: useUser can only be used inside a db.SignedIn component
+  const { id: userId } = db.useUser();
+
   // IMPORTANT: transact is how you write data to the database
   // We want to block until the profile is created, so we use await
   await db.transact(
@@ -118,6 +121,15 @@ function useProfile() {
   const profile = data?.profiles?.[0];
 
   return { profile, isLoading, error };
+}
+
+function useRequiredProfile() {
+  const { profile } = useProfile();
+  if (!profile) {
+    throw new Error('useRequiredProfile must be used inside EnsureProfile');
+  }
+
+  return profile;
 }
 
 function usePosts(pageNumber: number, pageSize: number) {
@@ -250,12 +262,11 @@ function CodeStep({ sentEmail }: { sentEmail: string }) {
 }
 
 function EnsureProfile({ children }: { children: React.ReactNode }) {
-  const user = db.useUser();
   const { isLoading, profile, error } = useProfile();
 
   useEffect(() => {
     if (!isLoading && !profile) {
-      createProfile(user.id);
+      createProfile();
     }
   }, [isLoading, profile]);
 
@@ -351,7 +362,7 @@ function Main() {
 
 function ProfileAvatar() {
   const user = db.useUser();
-  const { profile } = useProfile();
+  const profile = useRequiredProfile();
   const [isUploading, setIsUploading] = useState(false);
   const avatarPath = `${user.id}/avatar`;
 
